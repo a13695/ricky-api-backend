@@ -1,5 +1,6 @@
 package com.rickyapi.project.controller;
 
+import cn.hutool.core.date.DateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.google.gson.Gson;
@@ -15,6 +16,7 @@ import com.rickyapi.project.model.dto.interfaceinfo.InterfaceInfoInvokeRequest;
 import com.rickyapi.project.model.dto.interfaceinfo.InterfaceInfoQueryRequest;
 import com.rickyapi.project.model.dto.interfaceinfo.InterfaceInfoUpdateRequest;
 import com.rickyapi.project.model.enums.InterfaceInfoStatusEnum;
+import com.rickyapi.project.model.vo.InterfaceInfoVO;
 import com.rickyapi.project.service.InterfaceInfoService;
 import com.rickyapi.project.service.UserService;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -139,12 +142,21 @@ public class InterfaceInfoController {
      * @return
      */
     @GetMapping("/get")
-    public BaseResponse<InterfaceInfo> getInterfaceInfoById(long id) {
+    public BaseResponse<InterfaceInfoVO> getInterfaceInfoById(long id) {
         if (id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         InterfaceInfo interfaceInfo = interfaceInfoService.getById(id);
-        return ResultUtils.success(interfaceInfo);
+        // 转换返回日期时间的数据格式
+        InterfaceInfoVO interfaceInfoVO = new InterfaceInfoVO();
+        BeanUtils.copyProperties(interfaceInfo, interfaceInfoVO);
+        Date updateTime = interfaceInfo.getUpdateTime();
+        String handledUpdateTime = DateUtil.format(updateTime, "yyyy-MM-dd HH:mm:ss");
+        interfaceInfoVO.setUpdateTime(handledUpdateTime);
+        Date createTime = interfaceInfo.getCreateTime();
+        String handledCreateTime = DateUtil.format(createTime, "yyyy-MM-dd HH:mm:ss");
+        interfaceInfoVO.setCreateTime(handledCreateTime);
+        return ResultUtils.success(interfaceInfoVO);
     }
 
     /**
@@ -252,7 +264,11 @@ public class InterfaceInfoController {
         if (oldInterfaceInfo == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND_ERROR);
         }
-        // 仅本人或管理员可修改
+        // 2. 只有已经上线的接口才能下线
+        if (oldInterfaceInfo.getStatus() != InterfaceInfoStatusEnum.ONLINE.getValue()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "该接口尚未上线");
+        }
+        // 3. 修改数据库中接口的状态
         InterfaceInfo interfaceInfo = new InterfaceInfo();
         interfaceInfo.setId(id);
         interfaceInfo.setStatus(InterfaceInfoStatusEnum.OFFLINE.getValue());
